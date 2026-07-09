@@ -1,79 +1,74 @@
-import React, {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  useCallback,
-  useMemo,
-  ReactNode,
-} from 'react';
-import { apiGet, apiPost, clearSession } from '../api/client';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { apiGet, apiPost, clearSession, restoreSession } from '../api/client';
 
 export type User = {
   id: number;
   username: string;
-  email?: string | null;
-  balance: string;
-  cashbackBalance?: string;
-  totalSpent?: string;
-  vipLevel?: string;
-  referralCode: string;
-  referredBy?: string | null;
-  createdAt: string;
-  isAdmin?: boolean;
+  email?: string;
+  displayName?: string;
+  balance?: string;
+  referralCode?: string;
+  role?: string;
 };
 
-interface AuthContextType {
+type AuthContextType = {
   user: User | null;
-  isLoading: boolean;
-  refresh: () => Promise<void>;
+  loading: boolean;
+  login: (identifier: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-}
+  refresh: () => Promise<void>;
+};
 
-const AuthContext = createContext<AuthContextType>({
-  user: null,
-  isLoading: true,
-  refresh: async () => {},
-  logout: async () => {},
-});
+const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
 
-  const fetchMe = useCallback(async () => {
+  async function fetchMe() {
     try {
-      const data = await apiGet<User>('/api/auth/me');
-      setUser(data);
+      const me = await apiGet<User>('/api/auth/me');
+      setUser(me);
     } catch {
       setUser(null);
-    } finally {
-      setIsLoading(false);
     }
-  }, []);
+  }
 
   useEffect(() => {
-    fetchMe();
-  }, [fetchMe]);
-
-  const refresh = useCallback(async () => {
-    await fetchMe();
-  }, [fetchMe]);
-
-  const logout = useCallback(async () => {
-    try {
-      await apiPost('/api/auth/logout');
-    } catch {}
-    await clearSession();
-    setUser(null);
+    // Restore session from storage into native cookie jar, then check auth
+    (async () => {
+      try {
+        await restoreSession();
+        await fetchMe();
+      } catch {
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
-  const value = useMemo(
-    () => ({ user, isLoading, refresh, logout }),
-    [user, isLoading, refresh, logout],
-  );
+  async function login(identifier: string, password: string) {
+    await apiPost('/api/auth/login', { identifier, password });
+    // After login the cookie is captured by the API client
+    await fetchMe();
+  }
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  async function logout() {
+    try { await apiPost('/api/auth/logout'); } catch {}
+    await clearSession();
+    setUser(null);
+  }
+
+  async function refresh() {
+    await fetchMe();
+  }
+
+  return (
+    <AuthContext.Provider value={{ user, loading, login, logout, refresh }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {
