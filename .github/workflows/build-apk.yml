@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -17,11 +20,10 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: '22'
 
       - name: Install dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -37,15 +39,15 @@ jobs:
 
       - name: Install Android build tools
         run: |
-          sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018" || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" || true
 
-      - name: Expo Prebuild (generate android folder)
+      - name: Expo Prebuild
         run: |
           npx expo prebuild --platform android --no-install --clean
         env:
           EXPO_NO_TELEMETRY: 1
 
-      - name: Fix Gradle wrapper permissions
+      - name: Fix permissions
         run: chmod +x android/gradlew
 
       - name: Set local.properties
@@ -56,10 +58,8 @@ jobs:
           keytool -genkey -v \
             -keystore android/app/release.keystore \
             -alias ovelin \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -dname "CN=Ovelin Mall, OU=Mobile, O=Ovelin Mall, L=Khartoum, S=Sudan, C=SD" \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Ovelin Mall,OU=Mobile,O=Ovelin,L=Khartoum,S=Sudan,C=SD" \
             -storepass ovelin2024 \
             -keypass ovelin2024
 
@@ -67,54 +67,53 @@ jobs:
         run: |
           cd android
           ./gradlew assembleRelease \
-            -Pandroid.injected.signing.store.file=../android/app/release.keystore \
+            -Pandroid.injected.signing.store.file=$(pwd)/app/release.keystore \
             -Pandroid.injected.signing.store.password=ovelin2024 \
             -Pandroid.injected.signing.key.alias=ovelin \
             -Pandroid.injected.signing.key.password=ovelin2024 \
             --no-daemon \
-            --stacktrace
-        env:
-          GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx4096m"
+            -Dorg.gradle.jvmargs="-Xmx4096m -XX:MaxMetaspaceSize=512m"
 
-      - name: Find APK
-        run: find android -name "*.apk" -type f
-
-      - name: Rename APK
+      - name: Collect APK
         run: |
           mkdir -p output
-          cp android/app/build/outputs/apk/release/app-release*.apk output/OvelinMall-v${{ github.run_number }}.apk || \
-          cp $(find android -name "*.apk" -type f | head -1) output/OvelinMall-v${{ github.run_number }}.apk
+          APK=$(find android -name "app-release*.apk" -type f | head -1)
+          if [ -z "$APK" ]; then APK=$(find android -name "*.apk" -type f | head -1); fi
+          echo "Found APK: $APK"
+          cp "$APK" output/OvelinMall-v${{ github.run_number }}.apk
+          ls -lh output/
 
-      - name: Upload APK Artifact
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: OvelinMall-APK-v${{ github.run_number }}
           path: output/OvelinMall-v${{ github.run_number }}.apk
           retention-days: 90
 
-      - name: Create GitHub Release
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ github.run_number }}
-          name: "Ovelin Mall APK v${{ github.run_number }}"
+          name: "📱 Ovelin Mall APK v${{ github.run_number }}"
           body: |
-            ## 📱 Ovelin Mall Android APK
+            ## 📱 Ovelin Mall — تطبيق Android الأصيل
 
-            ### تثبيت التطبيق:
-            1. حمّل الملف `OvelinMall-v${{ github.run_number }}.apk`
-            2. فعّل "تثبيت من مصادر غير معروفة" في إعدادات جهازك
-            3. افتح الملف وثبّته
+            ### طريقة التثبيت:
+            1. **حمّل** ملف `OvelinMall-v${{ github.run_number }}.apk` أدناه
+            2. على هاتفك: **الإعدادات ← الأمان ← مصادر غير معروفة** ✅
+            3. افتح الملف المحمّل وثبّته
 
-            ### مميزات التطبيق:
-            - ✅ تطبيق أصيل (Native Android)
-            - ✅ يتصل مباشرة بسيرفر https://ovelinmall-ovelin-mall.hf.space
-            - ✅ جميع الصفحات مستقلة (بدون WebView)
-            - ✅ تصفح المنتجات والتصنيفات
-            - ✅ نظام طلبات كامل
-            - ✅ محفظة رقمية
-            - ✅ دعم فني
-            - ✅ نظام إحالة
-            - ✅ إشعارات
+            ### ✅ مميزات التطبيق:
+            - تطبيق Android أصيل بدون WebView
+            - يتصل بـ `https://ovelinmall-ovelin-mall.hf.space`
+            - جميع الملفات مستقلة ومحلية
+            - الرئيسية — تصنيفات ومنتجات
+            - نظام طلبات كامل مع تتبع الحالة
+            - محفظة رقمية (إيداع، معاملات)
+            - دعم فني (تذاكر)
+            - إحالة وتحويلات
+            - عروض فلاش مع عداد تنازلي
+            - إشعارات
           files: output/OvelinMall-v${{ github.run_number }}.apk
           draft: false
           prerelease: false
