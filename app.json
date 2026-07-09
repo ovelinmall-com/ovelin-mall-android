@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
@@ -27,14 +27,10 @@
       "targetSdkVersion": 34,
       "permissions": [
         "android.permission.INTERNET",
-        "android.permission.ACCESS_NETWORK_STATE",
-        "android.permission.CAMERA",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE"
+        "android.permission.ACCESS_NETWORK_STATE"
       ]
     },
     "plugins": [
-      "expo-font",
       [
         "expo-splash-screen",
         {
@@ -44,9 +40,6 @@
           "backgroundColor": "#FF0055"
         }
       ]
-    ],
-    "experiments": {
-      "typedRoutes": false
-    }
+    ]
   }
 }
